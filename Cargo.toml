@@ -1,0 +1,30 @@
+[package]
+name = "sql-transfer"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tiberius = "0.7.1"
+rust-ini = "0.18"
+# tokio={ version = "1.0", features = ["full"]  }
+# tokio-util = "0.7.1"
+iced = { version = "0.3", default-features = false, features = ["glow", "tokio", "debug"]}
+
+
+[dependencies.tokio]
+version = "1.0"
+features = ["full"]
+
+[dependencies.tokio-util]
+version = "0.7.1"
+features = ["compat"]
+
+[build-dependencies]
+embed-resource = "1.6"
+
+[profile.release]
+opt-level = "z"
+lto = true
+# cargo build --release --target=i686-pc-windows-msvc
