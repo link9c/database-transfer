@@ -1,17 +1,20 @@
+use mysql_async::{
+    prelude::{FromRow, FromValue, Queryable},
+    Conn, Opts, Pool,
+};
 use tiberius::{AuthMethod, Client, Config};
 use tokio::net::TcpStream;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
-use mysql_async::{Conn, Opts, Pool,prelude::{Queryable,FromRow,FromValue}};
 extern crate ini;
 use ini::Ini;
-
+mod gui;
 enum Direct {
     FROM,
     TO,
 }
 
 enum SQLClient {
-    Mysql((Conn,Pool)),
+    Mysql((Conn, Pool)),
     Mssql(tiberius::Client<tokio_util::compat::Compat<tokio::net::TcpStream>>),
 }
 
@@ -101,9 +104,8 @@ impl DatabaseMeta {
                 let opts = Opts::from_url(&database_url).expect("DATABASE_URL invalid");
                 let pool = Pool::new(opts);
                 let client = pool.get_conn().await?;
-                Ok(SQLClient::Mysql((client,pool)))
+                Ok(SQLClient::Mysql((client, pool)))
             }
-            
         }
     }
 }
@@ -114,30 +116,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{:?}", db_meta);
     let client = db_meta.client(Direct::TO).await?;
 
-        match client{
-            SQLClient::Mysql((mut c,p)) => {
-                let mut result = c.query_iter("SELECT id,action,uid from error_log limit 10").await?;
-                let res = result.collect::<(String,String,String)>().await?;
-                drop(c);
-                p.disconnect().await?;
-                println!("{:?}", res);
-
-        },
-            SQLClient::Mssql(mut c) => {
-                let row = c
-        .query(
-            "SELECT top 1 * from mds.mdm.Master_Employee_View",
-            &[&-4i32],
-        )
-        .await?
-        .into_row()
-        .await?
-        .unwrap();
-
-    println!("{:?}", row);
-            },
+    match client {
+        SQLClient::Mysql((mut c, p)) => {
+            let mut result = c
+                .query_iter("SELECT id,action,uid from error_log limit 10")
+                .await?;
+            let res = result.collect::<(String, String, String)>().await?;
+            drop(c);
+            p.disconnect().await?;
+            println!("{:?}", res);
         }
-    
+        SQLClient::Mssql(mut c) => {
+            let row = c
+                .query(
+                    "SELECT top 1 * from mds.mdm.Master_Employee_View",
+                    &[&-4i32],
+                )
+                .await?
+                .into_row()
+                .await?
+                .unwrap();
+
+            println!("{:?}", row);
+        }
+    }
 
     Ok(())
 }
