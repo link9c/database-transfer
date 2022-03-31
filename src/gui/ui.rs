@@ -1,21 +1,10 @@
-use iced::{
-    button, checkbox, executor, pick_list, scrollable,
-    window::{self, Icon},
-    Application, Button, Checkbox, Column, Command, Container, Element, Length, PickList, Row,
-    Scrollable, Settings, Subscription, Text,
-};
+use iced::{Align, Application, Button, Checkbox, Clipboard, Column, Command, Container, Element, HorizontalAlignment, Length, PickList, Row, Scrollable, Settings, Subscription, Text, VerticalAlignment, button, checkbox, executor, futures::executor::block_on, pick_list, scrollable, window::{self, Icon}};
 
 use crate::gui::{icon, style};
 
-// type Cardtype = Option<
-//     Box<
-//         dyn for<'r, 's> Fn(
-//             &'r HashMap<String, Vec<String>>,
-//             &'s Vec<Vec<String>>,
-//             usize,
-//         ) -> (usize, String),
-//     >,
-// >;
+use crate::db::{DatabaseMeta, Direct};
+
+use lazy_static::lazy_static;
 
 pub fn render_window() -> iced::Result {
     let dy_img = image::open("resource/1.ico");
@@ -49,17 +38,20 @@ pub fn render_window() -> iced::Result {
     })
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MyUi {
+    // db_meta:DatabaseMeta,
+    db_name: String,
+    table_list: Vec<(String, bool, usize)>,
+    check_button_list: Vec<button::State>,
     theme: Option<style::Theme>,
     init_button: button::State,
     left_button: button::State,
     right_button: button::State,
     font_dec_button: button::State,
-    check_list: Vec<bool>,
-    pick_list_left: pick_list::State<String>,
-    pick_list_right: pick_list::State<String>,
+    check_list: Vec<String>,
     pick_list_theme: pick_list::State<style::Theme>,
+    scroll_left: scrollable::State,
 }
 
 // impl GetCard {
@@ -77,6 +69,8 @@ pub struct MyUi {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    LoadConf,
+    SelectedTable(usize),
     DbSelected(String),
     ThemeChanged(style::Theme),
 }
@@ -100,81 +94,51 @@ impl Application for MyUi {
     }
 
     fn view(&mut self) -> Element<Message> {
-        let choose_theme = PickList::new(
-            &mut self.pick_list_theme,
-            &style::Theme::ALL[..],
-            self.theme,
-            Message::ThemeChanged,
+        let init_button = Button::new(
+            &mut self.init_button,
+            Text::new("load conf").height(Length::Shrink),
         )
         .style(self.theme.unwrap())
-        .text_size(12)
-        // .padding(0.1)
-        .width(Length::Units(60));
+        .on_press(Message::LoadConf);
 
-        let left_pick_db = PickList::new(
-            &mut self.pick_list_left,
-            ["a".to_string(), "b".to_string(), "c".to_string()],
-            Some("".to_string()),
-            Message::DbSelected,
-        )
-        .style(self.theme.unwrap())
-        .text_size(12)
-        // .padding(0.1)
-        .width(Length::Units(60));
+        let text = Text::new(&self.db_name).height(Length::Shrink);
 
-        // let button2 = Button::new(
-        //     &mut self.button2,
-        //     Text::new("change time")
-        //         .height(Length::Fill)
-        //         .vertical_alignment(alignment::Vertical::Center),
-        // )
-        // .on_press(Message::Send(echo::Input::Change(2000)));
+        let table_list = self
+            .table_list
+            .iter()
+            .zip(&mut self.check_button_list)
+            .fold(
+                Column::new().spacing(1),
+                |col, ((name, enabled, idx), but)| {
+                    col.push(
+                        Row::new()
+                            .push(
+                                Button::new(but, Text::new(name).height(Length::Fill))
+                                    .style(self.theme.unwrap())
+                                    .on_press(Message::SelectedTable(idx.to_owned())),
+                            )
+                            .push(Text::new("X").vertical_alignment(VerticalAlignment::Center)),
+                    )
+                },
+            );
+
+        let db_table_scroll_left = Scrollable::new(&mut self.scroll_left)
+            .push(table_list)
+            .width(Length::Fill)
+            .height(Length::Fill);
 
         let content = Column::new()
             // .padding(5)
             // .align_items(Alignment::c)
             .push(
-                Container::new(cname_label)
+                Container::new(init_button)
                     .width(Length::Fill)
                     .height(Length::Shrink)
                     .padding(5)
                     .style(self.theme.unwrap()),
             )
-            .push(
-                Container::new(ename_label)
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .padding(5)
-                    .style(self.theme.unwrap()),
-            )
-            .push(
-                Container::new(jname_label)
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .padding(5)
-                    .style(self.theme.unwrap()),
-            )
-            .push(
-                Container::new(attr_label)
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .padding(5)
-                    .style(self.theme.unwrap()),
-            )
-            .push(
-                Container::new(text_scrollable)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .padding(5)
-                    .style(self.theme.unwrap()),
-            )
-            .push(
-                Container::new(button_group)
-                    .width(Length::Fill)
-                    .height(Length::Shrink)
-                    .align_x(alignment::Horizontal::Right)
-                    .style(self.theme.unwrap()),
-            );
+            .push(text)
+            .push(db_table_scroll_left);
 
         // .push(button2);
 
@@ -186,52 +150,38 @@ impl Application for MyUi {
             .into()
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message, _: &mut Clipboard) -> Command<Self::Message> {
         match message {
-            Message::Echo((oid, event)) => match event {
-                echo::Event::MessageToUI(echo::Output::Card(card)) => {
-                    if self.card.cn_name != card.cn_name && !card.id.is_empty() && oid == 0 {
-                        self.card = card;
-                    }
-                }
-                echo::Event::Init => {
-                    self.card.desc = "加载完成。请开启游戏。".to_string();
-                }
-                echo::Event::Looping => {}
-            },
+            Message::LoadConf => {
+                let db_meta = DatabaseMeta::initial();
+                self.db_name = db_meta.clone().get_default_db(Direct::TO);
 
-            // Message::Send => {},
-            Message::Send => {}
-            Message::FontSizeAdd => {
-                if self.font_size < 30 {
-                    self.font_size += 1;
+                let table_list =
+                    block_on(async move { db_meta.clone().show_dbs(Direct::TO).await });
+
+                match table_list {
+                    Ok(val) => {
+                        self.table_list = val
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, x)| (x.to_owned(), false, idx))
+                            .collect::<Vec<(String, bool, usize)>>();
+                        self.check_button_list = vec![button::State::new(); val.len()];
+                    }
+                    Err(_) => self.table_list = vec![("TimedOut".to_string(), true, 0)],
                 }
             }
-            Message::FontSizeDec => {
-                if self.font_size > 6 {
-                    self.font_size -= 1;
-                }
-            }
-            Message::ThemeChanged(theme) => {
-                self.theme = Some(theme);
+            Message::DbSelected(_) => todo!(),
+            Message::ThemeChanged(t) => self.theme = Some(t),
+            Message::SelectedTable(b) => {
+                println!("{:?}", b);
+                // for each in &*checked{
+                //     println!("{}",each);
+                //     self.table_list[each.to_owned()].1 =b
+                // }
             }
         }
 
         Command::none()
-    }
-}
-
-#[derive(Debug)]
-struct EchoMap {
-    id: usize,
-}
-
-impl EchoMap {
-    pub fn new(id: usize) -> Self {
-        EchoMap { id }
-    }
-
-    pub fn subscription(&self) -> Subscription<Message> {
-        echo::init(self.id).map(Message::Echo)
     }
 }
