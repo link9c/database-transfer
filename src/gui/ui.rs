@@ -42,7 +42,7 @@ pub fn render_window() -> iced::Result {
 pub struct MyUi {
     // db_meta:DatabaseMeta,
     db_name: String,
-    table_list: Vec<(String, bool, usize)>,
+    table_list: Vec<(String, usize,bool)>,
     check_button_list: Vec<button::State>,
     theme: Option<style::Theme>,
     init_button: button::State,
@@ -70,7 +70,7 @@ pub struct MyUi {
 #[derive(Debug, Clone)]
 pub enum Message {
     LoadConf,
-    SelectedTable(usize),
+    SelectedTable((bool, usize)),
     DbSelected(String),
     ThemeChanged(style::Theme),
 }
@@ -106,16 +106,17 @@ impl Application for MyUi {
         let table_list = self
             .table_list
             .iter()
+            .filter(|x| x.2==true)
             .zip(&mut self.check_button_list)
             .fold(
                 Column::new().spacing(1),
-                |col, ((name, enabled, idx), but)| {
+                |col, ((name, idx,enabled), but)| {
                     col.push(
                         Row::new()
                             .push(
                                 Button::new(but, Text::new(name).height(Length::Fill))
                                     .style(self.theme.unwrap())
-                                    .on_press(Message::SelectedTable(idx.to_owned())),
+                                    .on_press(Message::SelectedTable((enabled.to_owned(),idx.to_owned()))),
                             )
                             .push(Text::new("X").vertical_alignment(VerticalAlignment::Center)),
                     )
@@ -164,17 +165,21 @@ impl Application for MyUi {
                         self.table_list = val
                             .iter()
                             .enumerate()
-                            .map(|(idx, x)| (x.to_owned(), false, idx))
-                            .collect::<Vec<(String, bool, usize)>>();
+                            .map(|(idx, x)| (x.to_owned(), idx,true))
+                            .collect::<Vec<(String, usize,bool)>>();
                         self.check_button_list = vec![button::State::new(); val.len()];
                     }
-                    Err(_) => self.table_list = vec![("TimedOut".to_string(), true, 0)],
+                    Err(_) => self.table_list = vec![("TimedOut".to_string(), 0,true)],
                 }
             }
             Message::DbSelected(_) => todo!(),
             Message::ThemeChanged(t) => self.theme = Some(t),
             Message::SelectedTable(b) => {
                 println!("{:?}", b);
+           
+                self.table_list[b.1].2=!b.0;
+             
+                
                 // for each in &*checked{
                 //     println!("{}",each);
                 //     self.table_list[each.to_owned()].1 =b
