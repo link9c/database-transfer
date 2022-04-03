@@ -6,7 +6,7 @@ use mysql_async::{
 use tiberius::{AuthMethod, Client, Config};
 use tokio::net::TcpStream;
 use tokio_util::compat::TokioAsyncWriteCompatExt;
-#[derive(Debug, Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Direct {
     FROM,
     TO,
@@ -19,14 +19,12 @@ impl Default for Direct {
 }
 
 impl Direct {
-
-    pub fn toggle(&mut self)->Self{
-        match self{
+    pub fn toggle(self) -> Self {
+        match self {
             Direct::FROM => Self::TO,
             Direct::TO => Self::FROM,
         }
     }
-    
 }
 
 pub enum SQLClient {
@@ -108,7 +106,7 @@ impl DatabaseMeta {
                 config.trust_cert();
 
                 let tcp = TcpStream::connect(config.get_addr()).await?;
-                tcp.set_nodelay(true)?;
+                //tcp.set_nodelay(true)?;
 
                 let client = match Client::connect(config, tcp.compat_write()).await {
                     // Connection successful.
@@ -162,7 +160,7 @@ impl DatabaseMeta {
                     .await?
                     .into_results()
                     .await?;
-
+                drop(c);
                 let res = row[0]
                     .iter()
                     .map(|x| {
@@ -228,7 +226,7 @@ impl DatabaseMeta {
                 let sql_str = format!(
                     "SELECT
                     COLUMN_NAME,
-                    COLUMN_DEFAULT,
+                    
                     DATA_TYPE,
                     CHARACTER_MAXIMUM_LENGTH,
                     COLUMN_COMMENT
@@ -242,9 +240,11 @@ impl DatabaseMeta {
                     ORDINAL_POSITION;",
                     ddb, table
                 );
+                println!("{}", sql_str);
                 let mut result = c.query_iter(sql_str).await?;
                 let res = result.collect::<(String, String, String, String)>().await?;
                 drop(c);
+
                 p.disconnect().await?;
                 res
             }
@@ -252,7 +252,7 @@ impl DatabaseMeta {
                 let sql_str = format!(
                     "SELECT
                 a.name AS COLUMN_NAME,
-                isnull( e.text, '' ) AS COLUMN_DEFAULT,
+                --isnull( e.text, '' ) AS COLUMN_DEFAULT,
                 b.name AS DATA_TYPE,
                 COLUMNPROPERTY( a.id, a.name, 'PRECISION' ) AS CHARACTER_MAXIMUM_LENGTH,
                 isnull( g.[value], '' ) AS COLUMN_COMMENT 
@@ -274,7 +274,7 @@ impl DatabaseMeta {
                 a.colorder",
                     table
                 );
-                println!("{}",sql_str);
+                println!("{}", sql_str);
                 let row = c.simple_query(sql_str).await?.into_results().await?;
 
                 let res = row[0]
